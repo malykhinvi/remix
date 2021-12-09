@@ -69,6 +69,7 @@ export interface LoaderFunction {
     | Response
     | Promise<AppData>
     | AppData;
+  suspend?: boolean;
 }
 
 /**

@@ -119,23 +119,33 @@ function sendRemixResponse(
   response: NodeResponse,
   abortController: AbortController
 ): void {
-  res.status(response.status);
+  res.statusCode = response.status;
 
+  let headers: Record<string, string | string[]> = {};
   for (let [key, values] of Object.entries(response.headers.raw())) {
-    for (const value of values) {
-      res.append(key, value);
-    }
+    res.setHeader(key, values.length === 1 ? values[0] : values);
+    headers[key] = values.length === 1 ? values[0] : values;
   }
 
   if (abortController.signal.aborted) {
-    res.set("Connection", "close");
+    headers.Connection = "close";
+  }
+
+  res.emit("ready");
+
+  if ((response.body as any) === res) {
+    console.log("RESPONSE BODY WAS RES");
+    return;
   }
 
   if (Buffer.isBuffer(response.body)) {
+    console.log("BUFFERED");
     res.end(response.body);
   } else if (response.body?.pipe) {
+    console.log("PIPED");
     response.body.pipe(res);
   } else {
+    console.log("END");
     res.end();
   }
 }

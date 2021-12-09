@@ -19,6 +19,7 @@ import {
   useResolvedPath
 } from "react-router-dom";
 import type { LinkProps, NavLinkProps } from "react-router-dom";
+import jsesc from "jsesc";
 
 import type { AppData } from "./data";
 import type { FormEncType, FormMethod } from "./data";
@@ -46,7 +47,7 @@ import type { RouteData } from "./routeData";
 import type { RouteMatch } from "./routeMatching";
 import { matchClientRoutes } from "./routeMatching";
 import type { RouteModules, HtmlMetaDescriptor } from "./routeModules";
-import { createTransitionManager } from "./transition";
+import { createTransitionManager, callLoader } from "./transition";
 import type { Transition, Fetcher, Submission } from "./transition";
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -248,13 +249,38 @@ function DefaultRouteComponent({ id }: { id: string }): React.ReactElement {
   );
 }
 
+export function LateRouteData() {
+  let ctx = useRemixRouteContext();
+
+  if (ctx.data instanceof Promise) {
+    throw ctx.data;
+  }
+
+  return (
+    <script
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{
+        __html:
+          typeof document === "undefined"
+            ? `window.lateData = window.lateData || {}; window.lateData[${JSON.stringify(
+                ctx.id
+              )}] = ${jsesc(ctx.data, {
+                isScriptContext: true
+              })};`
+            : " "
+      }}
+    />
+  );
+}
+
 export function RemixRoute({ id }: { id: string }) {
   let location = useLocation();
   let { routeData, routeModules, appState } = useRemixEntryContext();
 
-  let data = routeData[id];
   let { default: Component, CatchBoundary, ErrorBoundary } = routeModules[id];
   let element = Component ? <Component /> : <DefaultRouteComponent id={id} />;
+
+  let data = routeData[id];
 
   let context: RemixRouteContextType = { data, id };
 
@@ -350,7 +376,7 @@ export function RemixRoute({ id }: { id: string }) {
   // a call to `useLoaderData` doesn't accidentally get the parents route's data.
   return (
     <RemixRouteContext.Provider value={context}>
-      {element}
+      <React.Suspense fallback={"loading..."}>{element}</React.Suspense>
     </RemixRouteContext.Provider>
   );
 }
@@ -618,6 +644,12 @@ export function Meta() {
     let routeId = match.route.id;
     let data = routeData[routeId];
     let params = match.params;
+    let isSuspended =
+      data instanceof Promise || (data as any) === "$$PROMISE$$";
+
+    if (isSuspended) {
+      break;
+    }
 
     let routeModule = routeModules[routeId];
 
@@ -1186,7 +1218,69 @@ export function useMatches() {
  * Returns the data from the current route's `loader`.
  */
 export function useLoaderData<T = AppData>(): T {
-  return useRemixRouteContext().data;
+  let { matches, transitionManager, routeData } = useRemixEntryContext();
+  let ctx = useRemixRouteContext();
+
+  let data = ctx.data?.["$$SUSPENSE_DATA$$"]
+    ? ctx.data["$$SUSPENSE_DATA$$"]
+    : ctx.data;
+  let isLateData = data === "$$PROMISE$$";
+
+  React.useEffect(() => {
+    if ("$$SUSPENSE_DATA$$" in ctx.data) {
+      console.log(
+        "Putting late route data in state",
+        ctx.data?.["$$SUSPENSE_DATA$$"]
+      );
+      transitionManager.update({
+        loaderData: {
+          ...routeData,
+          [ctx.id]: ctx.data?.["$$SUSPENSE_DATA$$"]
+        }
+      });
+    }
+  }, [ctx.data]);
+
+  if (isLateData) {
+    throw new Promise<void>(resolve => {
+      if ((window as any).lateData && ctx.id in (window as any).lateData) {
+        console.log(
+          `Suspense data for "${ctx.id}" came from the SSR'd <LateRouteData />`
+        );
+        let lateData = (window as any).lateData[ctx.id];
+        ctx.data = {
+          $$SUSPENSE_DATA$$: lateData
+        };
+        resolve();
+        return;
+      }
+
+      console.log(
+        "Suspense data is loading on the client because SSR took too long and the client side scripts loaded"
+      );
+
+      let match = matches.find(match => match.route.id === ctx.id);
+      let controller = new AbortController();
+      return callLoader(
+        match!,
+        new URL(window.location.href),
+        controller.signal
+      ).then(r => {
+        ctx.data = {
+          $$SUSPENSE_DATA$$: r.value
+        };
+        resolve();
+      });
+    });
+  }
+
+  if (data instanceof Promise) {
+    throw data.then(lateData => {
+      ctx.data = lateData;
+    });
+  }
+
+  return data;
 }
 
 export function useActionData<T = AppData>(): T | undefined {
@@ -1213,7 +1307,7 @@ let fetcherId = 0;
 type FetcherWithComponents<TData> = Fetcher<TData> & {
   Form: ReturnType<typeof createFetcherForm>;
   submit: ReturnType<typeof useSubmitImpl>;
-  load: (href: string) => void;
+  load: (href: string) => Promise<void>;
 };
 
 /**
@@ -1225,9 +1319,10 @@ export function useFetcher<TData = any>(): FetcherWithComponents<TData> {
 
   let [key] = React.useState(() => String(++fetcherId));
   let [Form] = React.useState(() => createFetcherForm(key));
-  let [load] = React.useState(() => (href: string) => {
-    transitionManager.send({ type: "fetcher", href, key });
-  });
+  let [load] = React.useState(
+    () => (href: string) =>
+      transitionManager.send({ type: "fetcher", href, key })
+  );
   let submit = useSubmitImpl(key);
 
   let fetcher = transitionManager.getFetcher<TData>(key);

@@ -26,6 +26,7 @@ export {
   Form,
   PrefetchPageLinks,
   ScrollRestoration,
+  LateRouteData,
   LiveReload,
   useFormAction,
   useSubmit,

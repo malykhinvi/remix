@@ -1,4 +1,5 @@
 import type { DataFunctionArgs } from "./routeModules";
+import type { AppLoadContext } from "./data";
 import type { EntryContext, AssetsManifest } from "./entry";
 import type { ServerRouteManifest } from "./routes";
 
@@ -18,7 +19,8 @@ export interface HandleDocumentRequestFunction {
     request: Request,
     responseStatusCode: number,
     responseHeaders: Headers,
-    context: EntryContext
+    context: EntryContext,
+    loadContext: AppLoadContext
   ): Promise<Response> | Response;
 }
 

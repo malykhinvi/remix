@@ -22,6 +22,7 @@ export {
   Meta,
   Links,
   Scripts,
+  LateRouteData,
   Link,
   NavLink,
   Form,

@@ -17,9 +17,9 @@
     "@remix-run/react": "0.0.0-experimental-b697c4f3",
     "@remix-run/serve": "0.0.0-experimental-b697c4f3",
     "bcrypt": "^5.0.1",
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2",
-    "remix": "0.0.0-experimental-b697c4f3"
+    "react": "^18.0.0-rc.0",
+    "react-dom": "^18.0.0-rc.0",
+    "remix": "1.0.6"
   },
   "devDependencies": {
     "@remix-run/dev": "0.0.0-experimental-b697c4f3",

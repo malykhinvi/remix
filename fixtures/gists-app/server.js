@@ -16,6 +16,21 @@ app.use(
   })
 );
 
+// let static = express.static("public", {
+//   // maxAge: process.env.NODE_ENV === "production" ? "1y" : undefined
+//   maxAge: "1y"
+// });
+// app.use((req, res, next) => {
+//   if (req.url.startsWith("/build/")) {
+//     console.log("SLOW", req.url)
+//     setTimeout(() => {
+//       static(req, res, next);
+//     }, 5000);
+//   } else {
+//     static(req, res, next);
+//   }
+// });
+
 app.get("/fails.css", (req, res) => {
   res.status(500).send("Boom! No CSS here!");
 });
@@ -33,8 +48,8 @@ app.all(
   "*",
   createRequestHandler({
     build: require("./build"),
-    getLoadContext() {
-      return { userId: 4 };
+    getLoadContext(_, res) {
+      return { userId: 4, expressResponse: res };
     }
   })
 );

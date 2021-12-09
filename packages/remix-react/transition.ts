@@ -1158,6 +1158,7 @@ export function createTransitionManager(init: TransitionManagerInit) {
     getFetcher,
     deleteFetcher,
     dispose,
+    update,
     get _internalFetchControllers() {
       return fetchControllers;
     }
@@ -1205,7 +1206,11 @@ async function callLoaders(
   );
 }
 
-async function callLoader(match: ClientMatch, url: URL, signal: AbortSignal) {
+export async function callLoader(
+  match: ClientMatch,
+  url: URL,
+  signal: AbortSignal
+) {
   invariant(match.route.loader, `Expected loader for ${match.route.id}`);
   try {
     let { params } = match;
@@ -1268,6 +1273,10 @@ function filterMatchesToLoad(
   }
 
   let isNew = (match: ClientMatch, index: number) => {
+    if (!(match.route.id in state.loaderData)) {
+      return true;
+    }
+
     // [a] -> [a, b]
     if (!state.matches[index]) return true;
 

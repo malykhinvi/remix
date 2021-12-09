@@ -1,5 +1,5 @@
 import { useParams } from "remix";
-import { Link, useLoaderData, json, redirect } from "remix";
+import { LateRouteData, Link, useLoaderData, json, redirect } from "remix";
 
 let fakeGists = [
   {
@@ -19,6 +19,8 @@ let fakeGists = [
 ];
 
 export async function loader({ params }) {
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  // throw new Error("ROFL");
   let { username } = params;
 
   if (username === "mjijackson") {
@@ -29,8 +31,8 @@ export async function loader({ params }) {
     return json(null, { status: 404 });
   }
 
+  return fakeGists;
   if (process.env.NODE_ENV === "test") {
-    return fakeGists;
   }
 
   let response = await fetch(`https://api.github.com/users/${username}/gists`);
@@ -41,6 +43,7 @@ export async function loader({ params }) {
     }
   });
 }
+loader.suspend = true;
 
 export function headers() {
   return {
@@ -84,6 +87,8 @@ export default function UserGists() {
       ) : (
         <h2>No gists for {username}</h2>
       )}
+
+      <LateRouteData />
     </div>
   );
 }
